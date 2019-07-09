@@ -1,11 +1,10 @@
 #![windows_subsystem = "windows"]
+extern crate webview;
 
-extern crate web_view;
-
-use web_view::*;
+use webview::*;
 
 fn main() {
-    web_view::builder()
+    webview::WebViewBuilder::new()
         .title("Rust / Elm - Counter App")
         .content(Content::Html(include_str!("elm-counter/index.html")))
         .size(320, 480)
@@ -13,6 +12,8 @@ fn main() {
         .debug(true)
         .user_data(())
         .invoke_handler(|_webview, _arg| Ok(()))
+        .build()
+        .unwrap()
         .run()
         .unwrap();
 }

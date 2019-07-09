@@ -1,11 +1,11 @@
 //#![windows_subsystem = "windows"]
 
-extern crate web_view;
+extern crate webview;
 
-use web_view::*;
+use webview::*;
 
 fn main() -> WVResult {
-    let webview = web_view::builder()
+    let webview = webview::WebViewBuilder::new()
         .title("Dialog example")
         .content(Content::Html(HTML))
         .size(800, 600)
