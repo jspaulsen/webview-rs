@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate bitflags;
+
 // TODO: Unsure if wildcard BSD _actually_works
 #[cfg(any(target_os = "linux", target_os = "*bsd"))]
 mod webview_bind;
@@ -8,8 +11,12 @@ mod webview_bind_win;
 
 mod webview_ffi;
 
-#[macro_use]
-extern crate bitflags;
+#[cfg(any(target_os = "linux", target_os = "*bsd"))]
+pub use crate::webview_bind::webview_priv;
+#[cfg(target_os = "macos")]
+pub use crate::webview_bind_osx::webview_priv;
+#[cfg(target_os = "windows")]
+pub use crate::webview_bind_win::webview_priv;
 
 pub use webview_ffi::*;
 

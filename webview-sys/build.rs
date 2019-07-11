@@ -92,11 +92,15 @@ fn main() {
         panic!("unsupported target");
     }
 
-    // bindings
-    //     .generate()
-    //     .unwrap()
-    //     .write_to_file(outdir.join(binding_fpath))
-    //     .expect("Unable to generate webview bindings!");
+    let path = outdir.join(binding_fpath);
+
+    if !path.exists() {
+        bindings
+            .generate()
+            .unwrap()
+            .write_to_file(path)
+            .expect("Unable to generate webview bindings!");
+    }
 
     build.compile("webview");
 }

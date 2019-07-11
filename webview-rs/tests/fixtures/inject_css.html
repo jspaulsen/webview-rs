@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head>
+<script>
+  function injected_css() {
+    external.invoke(getComputedStyle(document.getElementById('app')).marginLeft);
+  }
+</script>
+</head>
+<body>
+<div id=app></div>
+</body>
+</html>

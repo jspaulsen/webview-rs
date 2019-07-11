@@ -21,16 +21,13 @@
 // //! [the examples]: https://github.com/Boscop/web-view/tree/master/examples
 // //! [original readme]: https://github.com/zserge/webview/blob/master/README.md
 //
-extern crate urlencoding;
-extern crate webview_sys as ffi;
-
 mod color;
 mod content;
 mod dialog;
 mod error;
 //mod escape;
 mod handle;
-mod user_data;
+mod state_data;
 
 use color::Color;
 pub use content::Content;
@@ -39,7 +36,7 @@ pub use error::{
     Error,
     WVResult,
 };
-use ffi::*;
+
 use handle::Handle;
 use std::ffi::{
     CStr,
@@ -53,16 +50,45 @@ use std::sync::{
     Arc,
     RwLock,
 };
-use user_data::UserData;
+use state_data::WebViewStateData;
 use urlencoding::encode;
+use webview_sys::*;
 
-
-#[derive(Clone)]
+/// Webview instance
+///
+/// Construct via a [`WebViewBuilder`]
+///
+/// [`WebViewBuilder`]: struct.WebViewBuilder.html
 pub struct WebView<T> {
     internal: *mut WebViewFFI,
     _phantom: PhantomData<T>
 }
 
+/// Builder for constructing a [`WebView`] instance.
+///
+/// # Example
+///
+/// ```no_run
+/// extern crate webview;
+///
+/// use webview::*;
+///
+/// fn main() {
+///     WebViewBuilder::new()
+///         .title("Minimal webview example")
+///         .content(Content::Url("https://en.m.wikipedia.org/wiki/Main_Page"))
+///         .size(800, 600)
+///         .resizable(true)
+///         .debug(true)
+///         .user_data(())
+///         .invoke_handler(|_webview, _arg| Ok(()))
+///         .build()
+///         .unwrap()
+///         .run()
+///         .unwrap();
+/// }
+/// ```
+///
 /// [`WebView`]: struct.WebView.html
 pub struct WebViewBuilder<'a, T: 'a, I, C: AsRef<str>> {
     pub title: &'a str,
@@ -71,8 +97,8 @@ pub struct WebViewBuilder<'a, T: 'a, I, C: AsRef<str>> {
     pub height: i32,
     pub resizable: bool,
     pub debug: bool,
-    pub invoke_handler: Option<I>, // req
-    pub user_data: Option<T> //Option<Box<UserData<'a, T>>>, // req
+    pub invoke_handler: Option<I>,
+    pub user_data: Option<T>
 }
 
 impl<'a, T: 'a, I, C> Default for WebViewBuilder<'a, T, I, C>
@@ -166,7 +192,7 @@ where
     /// Sets the initial state of the user data. This is an arbitrary value stored on the WebView
     /// thread, accessible from dispatched closures without synchronization overhead.
     pub fn user_data(mut self, data: T) -> Self {
-        self.user_data = Some(data); //Some(Box::new(UserData::new(data)));
+        self.user_data = Some(data); //Some(Box::new(WebViewStateData::new(data)));
         self
     }
 
@@ -188,7 +214,7 @@ where
             Content::Html(html) => CString::new(format!("data:text/html,{}", encode(html.as_ref())))?
         };
         let data = Box::new(
-            UserData::new(
+            WebViewStateData::new(
                 user_data,
                 Box::new(invoke_handler),
             )
@@ -214,7 +240,7 @@ impl<T> WebView<T> {
         unsafe {
             let raw = Box::into_raw(Box::new(internal));
 
-            match ffi::webview_init(raw) {
+            match webview_init(raw) {
                 0 => {
                     Ok(
                         Self {
@@ -228,31 +254,37 @@ impl<T> WebView<T> {
         }
     }
 
-    pub fn from_ptr(internal: *mut WebViewFFI) -> Self {
+    /// Returns an instance of WebView from a WebViewFFI instance.
+    ///
+    /// Care should be taken to not allow `WebView` instance to be dropped;  this can be
+    /// accomplished via [`mem::ManuallyDrop`]
+    fn from_ptr(internal: *mut WebViewFFI) -> Self {
         Self {
             internal,
             _phantom: PhantomData,
         }
     }
 
+    /// Returns a cloned instance of the [`Arc<RwLock<T>>`] used to access
+    /// user data in threadsafe fashion
     pub fn user_data(&self) -> Arc<RwLock<T>> {
         unsafe {
             let ffi: &WebViewFFI = &*self.internal;
-            let data: &UserData<T> = &* (ffi.userdata as *mut UserData<T>);
+            let data: &WebViewStateData<T> = &* (ffi.userdata as *mut WebViewStateData<T>);
 
             data.user_data()
         }
     }
 
-    // TODO: will change
-    fn state_data_mut(&mut self) -> &mut UserData<T> {
+    fn state_data_mut(&mut self) -> &mut WebViewStateData<T> {
         unsafe {
             let ffi: &WebViewFFI = &*self.internal;
-            &mut *(ffi.userdata as *mut UserData<T>)
+            &mut *(ffi.userdata as *mut WebViewStateData<T>)
 
         }
     }
 
+    /// Iterates the event loop. Returns `None` if the view has been closed or terminated.
     fn step(&mut self) -> Option<WVResult> {
         unsafe {
             match webview_loop(self.internal, 1) {
@@ -267,6 +299,7 @@ impl<T> WebView<T> {
         }
     }
 
+    /// Runs the event loop to completion
     pub fn run(mut self) -> WVResult {
         loop {
             match self.step() {
@@ -276,10 +309,12 @@ impl<T> WebView<T> {
         }
     }
 
+    /// Forces the `WebView` instance to end
     pub fn terminate(&mut self) {
         unsafe { webview_terminate(self.internal) }
     }
 
+    /// Executes the provided string as JavaScript code within the `WebView` instance.
     pub fn eval(&mut self, js: &str) -> WVResult {
         let js = CString::new(js)?;
         let ret = unsafe {
@@ -292,10 +327,11 @@ impl<T> WebView<T> {
         }
     }
 
-    pub fn inject_css(&mut self, js: &str) -> WVResult {
-        let js = CString::new(js)?;
+    /// Injects the provided string as CSS within the `WebView` instance.
+    pub fn inject_css(&mut self, css: &str) -> WVResult {
+        let css = CString::new(css)?;
         let ret = unsafe {
-            webview_inject_css(self.internal, js.as_ptr())
+            webview_inject_css(self.internal, css.as_ptr())
         };
 
         match ret {
@@ -304,6 +340,19 @@ impl<T> WebView<T> {
         }
     }
 
+    /// Sets the color of the title bar.
+    ///
+    /// # Examples
+    ///
+    /// Without specifying alpha (defaults to 255):
+    /// ```ignore
+    /// webview.set_color((123, 321, 213));
+    /// ```
+    ///
+    /// Specifying alpha:
+    /// ```ignore
+    /// webview.set_color((123, 321, 213, 127));
+    /// ```
     pub fn set_color<C: Into<Color>>(&mut self, color: C) {
         let color = color.into();
 
@@ -318,6 +367,13 @@ impl<T> WebView<T> {
         }
     }
 
+    /// Sets the title displayed at the top of the window.
+    ///
+    /// # Errors
+    ///
+    /// If `title` contain a nul byte, returns [`Error::NulByte`].
+    ///
+    /// [`Error::NulByte`]: enum.Error.html#variant.NulByte
     pub fn set_title(&mut self, title: &str) -> WVResult {
         let title = CString::new(title)?;
 
@@ -331,6 +387,7 @@ impl<T> WebView<T> {
         Ok(())
     }
 
+    /// Enables or disables fullscreen.
     pub fn set_fullscreen(&mut self, fullscreen: bool) {
         unsafe {
             webview_set_fullscreen(
@@ -345,10 +402,13 @@ impl<T> WebView<T> {
         DialogBuilder::new(self.internal)
     }
 
+    /// Creates a thread-safe [`Handle`] to the `WebView`, from which closures can be dispatched.
+    ///
+    /// [`Handle`]: struct.Handle.html
     pub fn handle(&self) -> Handle<T> {
         unsafe {
             let ffi: &WebViewFFI = &*self.internal;
-            let user_data: &UserData<T> = & *(ffi.userdata as *mut UserData<T>);
+            let user_data: &WebViewStateData<T> = & *(ffi.userdata as *mut WebViewStateData<T>);
 
             Handle::new(
                 self.internal,
@@ -360,15 +420,14 @@ impl<T> WebView<T> {
 
 impl<T> Drop for WebView<T> {
     fn drop(&mut self) {
-        println!("Issa WebView drop");
         unsafe {
             let ffi: &WebViewFFI = &*self.internal;
 
             webview_exit(self.internal);
 
-            // Drop both UserData and WebViewFFI which were
+            // Drop both WebViewStateData and WebViewFFI which were
             // instantiated and made into primitive pointers for FFI
-            drop_in_place(ffi.userdata as *mut UserData<T>);
+            drop_in_place(ffi.userdata as *mut WebViewStateData<T>);
             drop_in_place(self.internal);
         }
     }
@@ -380,7 +439,7 @@ where
 {
     let mut webview = ManuallyDrop::new(WebView::<T>::from_ptr(ffi));
     let webffi: &WebViewFFI = &*ffi;
-    let data: &mut UserData<T> = &mut *(webffi.userdata as *mut UserData<T>);
+    let data: &mut WebViewStateData<T> = &mut *(webffi.userdata as *mut WebViewStateData<T>);
 
     data.result = Some({
         let closure: Box<F> = Box::from_raw(arg as _);
@@ -392,7 +451,7 @@ pub unsafe extern "C" fn ffi_invoke_handler<T>(ffi: *mut WebViewFFI, arg: *const
     let webffi: &WebViewFFI = &*ffi;
     let arg = CStr::from_ptr(arg).to_string_lossy().to_string();
     let mut webview = ManuallyDrop::new(WebView::<T>::from_ptr(ffi));
-    let data: &mut UserData<T> = &mut *(webffi.userdata as *mut UserData<T>);
+    let data: &mut WebViewStateData<T> = &mut *(webffi.userdata as *mut WebViewStateData<T>);
 
     data.result = Some({
         (data.invoke_handler)(&mut webview, &arg)
@@ -401,40 +460,37 @@ pub unsafe extern "C" fn ffi_invoke_handler<T>(ffi: *mut WebViewFFI, arg: *const
 
 #[cfg(test)]
 mod test {
-    // use ffi::WebViewFFI;
-    // use std::ffi::c_void;
-    // use std::os::raw::*;
-    // use super::*;
-
-
-    // #[no_mangle]
-    // pub extern "C" fn webview_init(webview: *mut WebViewFFI) -> c_int {
-    //     127
-    // }
+    use super::*;
 
     #[test]
-    fn do_something() {
-        // let view = WebViewBuilder::new()
-        //     .title("Dummy")
-        //     .content(Content::Url("https://dummy-url"))
-        //     .user_data(())
-        //     .invoke_handler(|_, _| Ok(()))
-        //     .build();
-        //
-        // println!("Wow!: {:?}", view.is_err());
+    fn test_build_init() {
+        let view = WebViewBuilder::new()
+            .size(500, 500)
+            .content(Content::Url("http://dummy.url"))
+            .user_data(())
+            .invoke_handler(|_, _| Ok(()))
+            .build();
+
+        assert!(!view.is_err());
     }
 
-    // extern {
-    //     //pub fn webview_init(webview: *mut WebViewFFI) -> c_int;
-    // 	pub fn webview_loop(webview: *mut WebViewFFI, blocking: c_int) -> c_int;
-    // 	pub fn webview_terminate(webview: *mut WebViewFFI);
-    // 	pub fn webview_exit(webview: *mut WebViewFFI);
-    // 	pub fn webview_dispatch(webview: *mut WebViewFFI, f: Option<DispatchFn>, arg: *mut c_void);
-    // 	pub fn webview_eval(webview: *mut WebViewFFI, js: *const c_char) -> c_int;
-    // 	pub fn webview_inject_css(webview: *mut WebViewFFI, css: *const c_char) -> c_int;
-    // 	pub fn webview_set_title(webview: *mut WebViewFFI, title: *const c_char);
-    // 	pub fn webview_set_fullscreen(webview: *mut WebViewFFI, fullscreen: c_int);
-    // 	pub fn webview_set_color(webview: *mut WebViewFFI, red: u8, green: u8, blue: u8, alpha: u8);
-    // 	pub fn webview_dialog(webview: *mut WebViewFFI, dialog_type: DialogType, flags: DialogFlags, title: *const c_char, arg: *const c_char, result: *mut c_char, result_size: usize);
-    // }
+    #[test]
+    fn test_user_data() {
+        struct DummyData { dummy_value: i32 };
+        let dummy_value = 15;
+
+        let view = WebViewBuilder::new()
+            .size(500, 500)
+            .content(Content::Url("http://dummy.url"))
+            .user_data(DummyData { dummy_value })
+            .invoke_handler(|_, _| Ok(()))
+            .build()
+            .unwrap();
+
+        let user_data = view.user_data().read().unwrap().dummy_value;
+        view.user_data().write().unwrap().dummy_value = 17;
+
+        assert_eq!(dummy_value, user_data);
+        assert_eq!(17, view.user_data().read().unwrap().dummy_value);
+    }
 }

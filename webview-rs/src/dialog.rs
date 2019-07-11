@@ -1,9 +1,10 @@
-use error::WVResult;
-use ffi::{
+use crate::{
     WebViewFFI,
+    webview_dialog,
     DialogFlags,
     DialogType,
 };
+use crate::error::WVResult;
 use std::ffi::{
     CStr,
     CString,
@@ -30,7 +31,7 @@ impl DialogBuilder {
         let arg_cstr = CString::new(arg)?;
 
         unsafe {
-            ffi::webview_dialog(
+            webview_dialog(
                 self.ffi,
                 diag_type,
                 diag_flags,

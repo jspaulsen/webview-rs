@@ -1,17 +1,17 @@
 use std::ffi::c_void;
 use std::mem;
 use std::os::raw::*;
-use ::{
+use crate::{
     DialogFlags,
     DialogType,
 };
 
 #[cfg(any(target_os = "linux", target_os = "*bsd"))]
-use webview_bind::webview_priv;
+use crate::webview_bind::webview_priv;
 #[cfg(target_os = "macos")]
-use webview_bind_osx::webview_priv;
+use crate::webview_bind_osx::webview_priv;
 #[cfg(target_os = "windows")]
-use webview_bind_win::webview_priv;
+use crate::webview_bind_win::webview_priv;
 
 
 pub type InvokeFn = unsafe extern "C" fn(WebViewFFI: *mut WebViewFFI, arg: *const c_char);

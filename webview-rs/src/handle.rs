@@ -1,14 +1,12 @@
-use ::{
+use crate::{
     ffi_dispatch_handler,
     WebView,
+    WebViewFFI,
+    webview_dispatch,
 };
-use error::{
+use crate::error::{
     Error,
     WVResult,
-};
-use ffi::{
-    webview_dispatch,
-    WebViewFFI,
 };
 use std::marker::PhantomData;
 use std::sync::{
@@ -17,6 +15,10 @@ use std::sync::{
     Weak,
 };
 
+
+/// A thread-safe handle to a [`WebView`] instance. Used to dispatch closures onto its task queue.
+///
+/// [`WebView`]: struct.WebView.html
 pub struct Handle<T> {
     internal: *mut WebViewFFI,
     live: Weak<RwLock<()>>,
@@ -32,6 +34,17 @@ impl<T> Handle<T> {
         }
     }
 
+    /// Schedules a closure to be run on the [`WebView`] thread.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Dispatch`] if the [`WebView`] has been dropped.
+    ///
+    /// If the closure returns an `Err`, it will be returned on the next call to [`step()`].
+    ///
+    /// [`WebView`]: struct.WebView.html
+    /// [`Error::Dispatch`]: enum.Error.html#variant.Dispatch
+    /// [`step()`]: struct.WebView.html#method.step
     pub fn dispatch<F>(&self, func: F) -> WVResult
     where
         F: FnOnce(&mut WebView<T>) -> WVResult + Send + 'static,
@@ -39,7 +52,9 @@ impl<T> Handle<T> {
         let lock = self.live
             .upgrade()
             .ok_or(Error::Dispatch)?;
-        let _locked = lock.read().map_err(|_| Error::Dispatch)?;
+        let _locked = lock
+            .read()
+            .map_err(|_| Error::Dispatch)?;
         let closure = Box::new(func);
 
         unsafe {
@@ -50,7 +65,6 @@ impl<T> Handle<T> {
             )
         }
 
-        println!("dispatch!");
         Ok(())
     }
 }
