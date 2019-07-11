@@ -37,7 +37,7 @@ pub use error::{
     WVResult,
 };
 
-use handle::Handle;
+pub use handle::Handle;
 use std::ffi::{
     CStr,
     CString,
