@@ -57,13 +57,7 @@ impl DialogBuilder {
             DialogType::Open,
             DialogFlags::FILE,
         )
-        .map(|path| {
-            if path.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(path))
-            }
-        })
+        .map(|path| if path.is_empty() { None } else { Some(PathBuf::from(path)) })
     }
 
     /// Opens a new choose directory dialog as returns the chosen directory path.
