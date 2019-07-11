@@ -165,30 +165,3 @@ fn test_misc() {
     view.run().unwrap();
     thread.join().unwrap();
 }
-
-// pub fn set_color<C: Into<Color>>(&mut self, color: C) {
-//     let color = color.into();
-//
-//     unsafe {
-//         webview_set_color(
-//             self.internal,
-//             color.r,
-//             color.g,
-//             color.b,
-//             color.a,
-//         );
-//     }
-// }
-//
-// pub fn set_title(&mut self, title: &str) -> WVResult {
-//     let title = CString::new(title)?;
-//
-//     unsafe {
-//         webview_set_title(
-//             self.internal,
-//             title.as_ptr(),
-//         )
-//     };
-//
-//     Ok(())
-// }
