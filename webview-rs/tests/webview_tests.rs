@@ -69,7 +69,6 @@ fn test_inject_css() {
         .content(Content::Html(INJECT_CSS_HTML))
         .user_data(())
         .invoke_handler(|view, arg| {
-            println!("Invoke!");
             assert_eq!("4px", arg);
 
             view.terminate();

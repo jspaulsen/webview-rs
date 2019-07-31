@@ -47,12 +47,6 @@ impl WebViewFFI {
     }
 }
 
-impl Drop for WebViewFFI {
-    fn drop(&mut self) {
-        println!("Issa WebViewFFI drop");
-    }
-}
-
 extern {
     pub fn webview_init(webview: *mut WebViewFFI) -> c_int;
 	pub fn webview_loop(webview: *mut WebViewFFI, blocking: c_int) -> c_int;
