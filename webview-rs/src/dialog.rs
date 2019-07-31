@@ -1,38 +1,40 @@
-use ffi::{self, DialogFlags, DialogType};
-use std::{ffi::CString, path::PathBuf};
-use {read_str, WVResult, WebView};
+use crate::{
+    WebViewFFI,
+    webview_dialog,
+    DialogFlags,
+    DialogType,
+};
+use crate::error::WVResult;
+use std::ffi::{
+    CStr,
+    CString,
+};
+use std::path::PathBuf;
 
 const STR_BUF_SIZE: usize = 4096;
 
 /// A builder for opening a new dialog window.
-#[derive(Debug)]
-pub struct DialogBuilder<'a: 'b, 'b, T: 'a> {
-    webview: &'b mut WebView<'a, T>,
+// #[derive(Debug)]
+pub struct DialogBuilder {
+    ffi: *mut WebViewFFI,
 }
 
-impl<'a: 'b, 'b, T: 'a> DialogBuilder<'a, 'b, T> {
+impl DialogBuilder {
     /// Creates a new dialog builder for a WebView.
-    pub fn new(webview: &'b mut WebView<'a, T>) -> DialogBuilder<'a, 'b, T> {
-        DialogBuilder { webview }
+    pub fn new(ffi: *mut WebViewFFI) -> DialogBuilder {
+        DialogBuilder { ffi }
     }
 
-    fn dialog(
-        &mut self,
-        title: String,
-        arg: String,
-        dialog_type: DialogType,
-        dialog_flags: DialogFlags,
-    ) -> WVResult<String> {
+    fn dialog(&mut self, title: String, arg: String, diag_type: DialogType, diag_flags: DialogFlags) -> WVResult<String> {
         let mut s = [0u8; STR_BUF_SIZE];
-
         let title_cstr = CString::new(title)?;
         let arg_cstr = CString::new(arg)?;
 
         unsafe {
-            ffi::webview_dialog(
-                self.webview.inner,
-                dialog_type,
-                dialog_flags,
+            webview_dialog(
+                self.ffi,
+                diag_type,
+                diag_flags,
                 title_cstr.as_ptr(),
                 arg_cstr.as_ptr(),
                 s.as_mut_ptr() as _,
@@ -55,38 +57,22 @@ impl<'a: 'b, 'b, T: 'a> DialogBuilder<'a, 'b, T> {
             DialogType::Open,
             DialogFlags::FILE,
         )
-        .map(|path| {
-            if path.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(path))
-            }
-        })
+        .map(|path| if path.is_empty() { None } else { Some(PathBuf::from(path)) })
     }
 
     /// Opens a new choose directory dialog as returns the chosen directory path.
-    pub fn choose_directory<S, P>(
-        &mut self,
-        title: S,
-        default_directory: P,
-    ) -> WVResult<Option<PathBuf>>
+    pub fn choose_directory<S, P>(&mut self, title: S, default_dir: P) -> WVResult<Option<PathBuf>>
     where
         S: Into<String>,
         P: Into<PathBuf>,
     {
         self.dialog(
             title.into(),
-            default_directory.into().to_string_lossy().into_owned(),
+            default_dir.into().to_string_lossy().into_owned(),
             DialogType::Open,
             DialogFlags::DIRECTORY,
         )
-        .map(|path| {
-            if path.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(path))
-            }
-        })
+        .map(|path| if path.is_empty() { None } else { Some(PathBuf::from(path)) })
     }
 
     /// Opens an info alert dialog.
@@ -132,5 +118,13 @@ impl<'a: 'b, 'b, T: 'a> DialogBuilder<'a, 'b, T> {
             DialogFlags::ERROR,
         )
         .map(|_| ())
+    }
+}
+
+fn read_str(s: &[u8]) -> String {
+    let end = s.iter().position(|&b| b == 0).map_or(0, |i| i + 1);
+    match CStr::from_bytes_with_nul(&s[..end]) {
+        Ok(s) => s.to_string_lossy().into_owned(),
+        Err(_) => "".to_string(),
     }
 }

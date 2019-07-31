@@ -24,6 +24,8 @@ pub enum Error {
     /// Failure to dispatch a closure to a WebView instance via a handle, likely because the
     /// WebView was dropped.
     Dispatch,
+    /// WebViewStateData lock was poisoned
+    Poisoned,
     /// An user-specified error occurred. For use inside invoke and dispatch closures.
     Custom(Box<CustomError>),
 }
@@ -62,6 +64,7 @@ impl Display for Error {
             Error::NulByte(cause) => write!(f, "{}", cause),
             Error::JsEvaluation => write!(f, "Failed to evaluate JavaScript."),
             Error::CssInjection => write!(f, "Failed to inject CSS."),
+            Error::Poisoned => write!(f, "WebViewStateData lock was poisoned"),
             Error::Dispatch => write!(
                 f,
                 "Closure could not be dispatched. WebView was likely dropped."

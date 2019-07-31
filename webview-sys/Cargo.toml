@@ -1,6 +1,6 @@
 [package]
 name = "webview-sys"
-version = "0.1.2"
+version = "0.1.0"
 authors = ["Boscop"]
 license = "MIT"
 repository = "https://github.com/Boscop/web-view"
@@ -8,11 +8,7 @@ description = "Rust native ffi bindings for webview"
 keywords = ["web", "gui", "desktop", "electron", "webkit"]
 categories = ["gui", "web-programming", "api-bindings", "rendering", "visualization"]
 build = "build.rs"
-links = "webview"
-
-[lib]
-name = "webview_sys"
-path = "lib.rs"
+edition = "2018"
 
 [dependencies]
 bitflags = "1.0"
@@ -20,3 +16,4 @@ bitflags = "1.0"
 [build-dependencies]
 cc = "1"
 pkg-config = "0.3"
+bindgen = "0.50.0"

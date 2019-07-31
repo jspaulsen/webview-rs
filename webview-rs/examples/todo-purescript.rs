@@ -1,11 +1,11 @@
 #![windows_subsystem = "windows"]
 
-extern crate web_view;
+extern crate webview;
 
-use web_view::*;
+use webview::*;
 
 fn main() {
-    web_view::builder()
+    webview::WebViewBuilder::new()
         .title("Rust / PureScript - Todo App")
         .content(Content::Html(include_str!("todo-ps/dist/bundle.html")))
         .size(320, 480)
@@ -13,6 +13,8 @@ fn main() {
         .debug(true)
         .user_data(())
         .invoke_handler(|_webview, _arg| Ok(()))
+        .build()
+        .unwrap()
         .run()
         .unwrap();
 }

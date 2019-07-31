@@ -3,9 +3,9 @@
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-extern crate web_view;
+extern crate webview;
 
-use web_view::*;
+use webview::*;
 
 fn main() {
     let html = format!(r#"
@@ -31,7 +31,7 @@ fn main() {
 		scripts = inline_script(include_str!("todo/picodom.js")) + &inline_script(include_str!("todo/app.js")),
 	);
 
-    let mut webview = web_view::builder()
+    let mut webview = webview::WebViewBuilder::new()
         .title("Rust Todo App")
         .content(Content::Html(html))
         .size(320, 480)
@@ -42,7 +42,8 @@ fn main() {
             use Cmd::*;
 
             let tasks_len = {
-                let tasks = webview.user_data_mut();
+                let locked_tasks = webview.user_data();
+                let mut tasks = locked_tasks.write().unwrap();
 
                 match serde_json::from_str(arg).unwrap() {
                     Init => (),
@@ -62,17 +63,15 @@ fn main() {
         .unwrap();
 
     webview.set_color((156, 39, 176));
-
-    let res = webview.run().unwrap();
-
-    println!("final state: {:?}", res);
+    webview.run().unwrap();
 }
 
 fn render(webview: &mut WebView<Vec<Task>>) -> WVResult {
     let render_tasks = {
-        let tasks = webview.user_data();
+        let lock = webview.user_data();
+        let tasks = lock.read().unwrap();
         println!("{:#?}", tasks);
-        format!("rpc.render({})", serde_json::to_string(tasks).unwrap())
+        format!("rpc.render({})", serde_json::to_string(&*tasks).unwrap())
     };
     webview.eval(&render_tasks)
 }
